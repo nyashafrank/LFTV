@@ -60,10 +60,8 @@ public class locked {
         long endTime = System.currentTimeMillis();
 
         //System.out.println("\nExecution time = " + (endTime - startTime) + "ms\n");
-    
-        
+       
     }
-
 }
 
 
@@ -127,12 +125,6 @@ class Perform implements Runnable {
             else if (op.operationType == OperationType.write) {
                 rwop.lastWriteOp = op;
             }
-
-            // same for pushback and popback - keep track of furthest index accessed by pushback
-
-
-            // do something with size calls and t.size
-
 
             // Keep track of largest reserve call
             if(op.operationType == OperationType.reserve) {
@@ -212,11 +204,70 @@ class Perform implements Runnable {
         Integer position = lockManager.lock(request);
 
         // Complete operations here
-       
-
+       //   UpdateElement();
 
         System.out.println("\nThread " +Thread.currentThread().getName() + " has completed\n" + desc);
 
         lockManager.unlock(position);
     }
+
+
+/*
+    public static Boolean UpdateElement(Transaction desc, int index, RWOperation rwop) {
+
+
+        // out of bounds access
+        if(index > v.array.length) {
+            desc.status.set(TxnStatus.aborted);
+            return false;
+        }
+
+        CompactElement newElem = new CompactElement();
+        CompactElement oldElem = v.array[index];
+
+   
+        // should probably get rid of these atomics for the sequential version
+        if(oldElem.desc.status.get() == TxnStatus.committed && oldElem.desc.set != null) {
+
+            if(oldElem.desc.set.containsKey(index)) {
+                Operation oldElemLastWrite = oldElem.desc.set.get(index).lastWriteOp;
+                if( oldElemLastWrite != null) {
+                    newElem.oldValue = oldElem.newValue;
+                }
+                else newElem.oldValue = oldElem.oldValue;
+            }
+                
+        }
+        else newElem.oldValue = oldElem.oldValue;
+
+
+        // accessing out of bounds
+        if(rwop.checkBounds && newElem.oldValue == UNSET) {
+            desc.status.set(TxnStatus.aborted);
+            return false;
+        }
+
+        // perform the write operation or maybe not
+        if(rwop.lastWriteOp != null) {
+            newElem.newValue = rwop.lastWriteOp.value;
+        }
+        else {
+            newElem.oldValue = v.array[index].oldValue;
+        }
+            
+        
+        
+        newElem.desc = desc;
+
+        v.array[index] = newElem;
+
+        for(int i = 0; i < rwop.readList.size(); i++) {
+            Operation op = rwop.readList.get(i);
+            op.returnValue = newElem.oldValue;
+        }
+
+
+        return true;
+    }
+    */
 }

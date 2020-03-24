@@ -21,13 +21,13 @@ public class sequential {
                 
         Populate();
 
-        for(int i = 0; i < v.array.length; i++) {
-            System.out.println(v.array[i]);
-        }
+        // for(int i = 0; i < v.array.length; i++) {
+        //     System.out.println(v.array[i]);
+        // }
 
         int txnCount = 0;
 
-        while(txnCount < 10) {
+        while(txnCount < 2) {
 
             // Create Transaction
             Transaction t = BuildTransaction();
@@ -38,23 +38,24 @@ public class sequential {
             // Perform Transaction
             Boolean result = CompleteTransaction(t);
 
-            if(result)
-                System.out.println("Completed\n" + t);
-            else
-                System.out.println("Aborted\n" + t);
+            // if(result)
+            //     System.out.println("Completed\n" + t);
+            // else
+            //     System.out.println("Aborted\n" + t);
 
 
             txnCount++;
         }
 
-        System.out.println();
+        //   System.out.println();
 
+        //  //print out final state of the vector
+        //   for(int i = 0; i < v.array.length; i++) {
+        //       System.out.println(v.array[i]);
+        //   }
+     }
 
-        for(int i = 0; i < v.array.length; i++) {
-            System.out.println(v.array[i]);
-        }
-    }
-
+    // Preprocessing 
     private static int Preprocess(Transaction t) {
 
         RWOperation rwop = null;
@@ -195,7 +196,6 @@ public class sequential {
             // must perform read and writes from high to lo index 
             Collections.reverse(list);
 
-           System.out.println("the set has " + list.size());
             
             Iterator<Integer> it = list.iterator();        
 
@@ -209,7 +209,6 @@ public class sequential {
 
 
                 if(!result) {
-                    System.out.println("update element failed\n");
                     return false;
                 }
             }
@@ -230,7 +229,7 @@ public class sequential {
         CompactElement newElem = new CompactElement();
         CompactElement oldElem = v.array[index];
 
-
+   
         // should probably get rid of these atomics for the sequential version
         if(oldElem.desc.status.get() == TxnStatus.committed && oldElem.desc.set != null) {
 
@@ -249,7 +248,6 @@ public class sequential {
         // accessing out of bounds
         if(rwop.checkBounds && newElem.oldValue == UNSET) {
             desc.status.set(TxnStatus.aborted);
-            System.out.println("yeah you guessed it");
             return false;
         }
 
@@ -257,6 +255,10 @@ public class sequential {
         if(rwop.lastWriteOp != null) {
             newElem.newValue = rwop.lastWriteOp.value;
         }
+        else {
+            newElem.oldValue = v.array[index].oldValue;
+        }
+            
         
         
         newElem.desc = desc;

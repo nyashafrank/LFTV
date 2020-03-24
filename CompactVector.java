@@ -93,6 +93,7 @@ public class CompactVector {
         size++;       
     }
 
+
     public int PopBack() {
     	int len = array.length-1;
     	int oldVal = this.array[len].oldValue;
