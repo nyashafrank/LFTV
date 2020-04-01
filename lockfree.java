@@ -160,7 +160,7 @@ class Perform implements Runnable {
 
             Transaction t = transactions[i];
             Preprocess(t);
-            CompleteTransaction(t);
+            CompleteTransaction(t, 0);
 
            // System.out.println("Thread " + Thread.currentThread().getName() + "\n" + t);
 
@@ -181,7 +181,6 @@ class Perform implements Runnable {
 
             if(t.set.containsKey(op.index)) 
                 rwop = t.set.get(op.index);
-            
             else    
                 rwop = new RWOperation();
 
@@ -251,7 +250,7 @@ class Perform implements Runnable {
     }
 
 
-    private Boolean CompleteTransaction(Transaction desc) {
+    private Boolean CompleteTransaction(Transaction desc, int lowerBounds) {
 
         boolean result = true;
 
