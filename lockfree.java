@@ -260,7 +260,8 @@ class Perform implements Runnable {
 
         List<Integer> list = new ArrayList<>();
         for(Integer x : indexes) {
-            list.add(x);
+            if (x >= lowerBounds)
+                list.add(x);
         }
         
         Collections.sort(list);
