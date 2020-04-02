@@ -1,4 +1,5 @@
 import java.util.BitSet;
+import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 
 //import sun.tools.tree.BooleanExpression;
@@ -47,27 +48,34 @@ public class MRLOCK {
             Integer seq = c.seq.get();
             Integer dif = seq - pos;
             if (dif == 0) {
-                if (tail.compareAndExchange(pos, pos+1) == pos) {
-                  //  System.out.println("pos = " + pos + "\nseq = " + seq + "\n dif = " + dif);
+                if (Objects.equals(tail.compareAndExchange(pos, pos+1), pos)) {
+                    //System.out.println("pos = " + pos + "\nseq = " + seq + "\n dif = " + dif);
                     break;
                 }
             }    
-           // printRequests();
+            printRequests();
 
            // System.out.println(" STUCK HERE");
            // System.out.println("pos = " + pos + "\nseq = " + seq + "\n dif = " + dif);
         }
+//        System.out.println("Not Stuck Anymore");
 
         c.bits = r;
         c.seq.set(pos + 1);
         Integer spin = head.get();
-        while (spin != pos) {
+        while (!Objects.equals(spin, pos)) {
             // the cell is free and recycled OR the request in the cell has no conflict, then advance down the line
-            if (pos - buffer[spin & mask].seq.get() > mask || !isConflict(r, buffer[spin & mask].bits)  )
+            if ( !isConflict(r, buffer[spin & mask].bits) || pos - buffer[spin & mask].seq.get() > mask ) {
                 spin++;
-
+//                System.out.println("In if statement");
+//                System.out.println("spin: " + spin + ", pos" + pos);
+            }
+                
+//             System.out.println("In while statement");
                 
         }
+        
+//        System.out.println("While Loop Over");
 
         return pos;
     }
@@ -86,7 +94,7 @@ public class MRLOCK {
     }
 
     public void unlock(Integer h) {
-
+//        System.out.println("Unlock happening");
         // clear the cell request at index h 
         buffer[h & mask].bits.clear();
 
@@ -95,7 +103,7 @@ public class MRLOCK {
         // while the head's cell request is clear
         while(buffer[pos & mask].bits.isEmpty()) {
 
-         //   System.out.println( Thread.currentThread().getName() +" unlocking");
+            System.out.println( Thread.currentThread().getName() +" unlocking");
             Cell c = buffer[pos & mask];
 
             Integer seq = c.seq.get();
@@ -109,7 +117,7 @@ public class MRLOCK {
                 }
             }
 
-          //  System.out.println("WE stuck");
+//            System.out.println("WE stuck");
             pos = head.get();
         }
 
