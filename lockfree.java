@@ -1,5 +1,7 @@
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ThreadLocalRandom;
 
 
@@ -143,11 +145,19 @@ class Perform implements Runnable {
 
     public Transaction[] transactions;
     public CompactLFTV v;
+    public CompactElement possibleSize;
+    public CompactElement oldSize;
+    public int vectorSize;
+    CompactElement newSize;
+
+   
 
 
     public Perform (Transaction[] t, CompactLFTV lftv) {              // ******** PASS IN LFTV REFERENCE  *********
         this.transactions = t;
         this.v = lftv;
+
+        //possibleSize = new CompactElement();
     }
 
 
@@ -159,8 +169,14 @@ class Perform implements Runnable {
         for(int i = 0; i < transactions.length; i++) {
 
             Transaction t = transactions[i];
-            Preprocess(t);
-            CompleteTransaction(t, 0);
+            t.set = null;
+
+            boolean success = Preprocess(t);
+
+            if(success)
+                CompleteTransaction(t, 0);
+            else 
+                t.status.set(TxnStatus.aborted);
 
            // System.out.println("Thread " + Thread.currentThread().getName() + "\n" + t);
 
@@ -170,64 +186,172 @@ class Perform implements Runnable {
         }
     }
 
-    private int Preprocess(Transaction t) {
+
+    private boolean Preprocess(Transaction t) {
+
+        ConcurrentMap<Integer,RWOperation> localSet = new ConcurrentHashMap<Integer, RWOperation>();
 
         RWOperation rwop = null;
         int largestReserve = 0;
-      //  int possibleSize = v.size;
+        int possibleSize = 0;
+        boolean sizeAcquired = false;        
 
         for (int i = 0; i < t.operations.length; i++) {   
             Operation op = t.operations[i];
 
-            if(t.set.containsKey(op.index)) 
-                rwop = t.set.get(op.index);
+            if(localSet.containsKey(op.index)) 
+                rwop = localSet.get(op.index);
             else    
                 rwop = new RWOperation();
 
+
+            // READ OPERATION
             if(op.operationType == OperationType.read) {
+
+                if(sizeAcquired && op.index >= possibleSize) {
+                    return false;
+                }
                 
                 // Add read to the list so we can store the elements oldval in its return in updateElement
-                if(rwop.lastWriteOp == null){
-                    rwop.checkBounds = true;
+                if(rwop.lastWriteOp == null ){
+
+                    // Check if it's the first operation for this index and set checkBounds
+                    if(rwop.readList.size() == 0) {
+                        rwop.checkBounds = true;
+                    }
+
                     rwop.readList.add(op);
-                    t.set.put(op.index, rwop);
+                    localSet.put(op.index, rwop);
                 }
                 else {
                     op.returnValue = rwop.lastWriteOp.value;
                 }
             }
 
+
+            // WRITE OPERATION
             else if (op.operationType == OperationType.write) {
-                rwop.checkBounds = true;
+
+                // Check if the index is greater than the possible size
+                if(sizeAcquired && op.index >= possibleSize) {
+                    return false;
+                }
+
+                // Check if it's the first operation for this index and set checkBounds
+                if(rwop.lastWriteOp == null && rwop.readList.size() == 0) {
+                    rwop.checkBounds = true;
+                }
+
                 rwop.lastWriteOp = op;
-                t.set.put(op.index, rwop);
+                localSet.put(op.index, rwop);
             }
 
-            /*else if (op.operationType == OperationType.size) {
-                op.index = possibleSize;
-            }*/
-/*
+
+            // SIZE OPERATION
+            else if (op.operationType == OperationType.size) {
+
+                if (!sizeAcquired) {
+
+                    do {
+                        oldSize = v.size.get();
+                        newSize = new CompactElement(oldSize.oldValue, oldSize.newValue, t);
+                        
+                        while (oldSize.desc.status.get() == TxnStatus.active)
+                             CompleteTransaction(oldSize.desc, 0);
+
+                        if (oldSize.desc.status.get() == TxnStatus.committed)
+                                newSize.oldValue = oldSize.newValue;
+                        else 
+                                newSize.oldValue = oldSize.oldValue;
+
+                         newSize.desc = t;
+                    } while(!v.size.compareAndSet(oldSize, newSize));
+
+                    possibleSize = newSize.oldValue;
+                    sizeAcquired = true;    
+                }
+
+                op.returnValue = possibleSize;
+            }
+
+
+            // POPBACK OPERATION
             else if (op.operationType == OperationType.popBack) {
+
+                // Check if it's the first operation for this index and set checkBounds
+                if(rwop.lastWriteOp == null && rwop.readList.size() == 0) {
+                    rwop.checkBounds = false;
+                }
+
+                if(!sizeAcquired) {
+                    do {
+                        oldSize = v.size.get();
+                        newSize = new CompactElement(oldSize.oldValue, oldSize.newValue, t);
+                        
+                        while (oldSize.desc.status.get() == TxnStatus.active)
+                             CompleteTransaction(oldSize.desc, 0);
+
+                        if (oldSize.desc.status.get() == TxnStatus.committed)
+                                newSize.oldValue = oldSize.newValue;
+                        else 
+                                newSize.oldValue = oldSize.oldValue;
+
+                         newSize.desc = t;
+                    } while(!v.size.compareAndSet(oldSize, newSize));
+
+                    sizeAcquired = true;
+                    possibleSize = newSize.oldValue;
+                }
+
                 possibleSize--;
-                if(t.set.containsKey(possibleSize)) 
-                    rwop = t.set.get(possibleSize);
+                if(localSet.containsKey(possibleSize)) 
+                    rwop = localSet.get(possibleSize);
                 else    
                     rwop = new RWOperation();
+
                 op.index = possibleSize;
-                rwop.checkBounds = false;
                 rwop.readList.add(op);
                 rwop.lastWriteOp = op;
-                t.set.put(op.index, rwop);
+                localSet.put(op.index, rwop);
             }
 
+
+            // PUSHBACK OPERATION
             else if (op.operationType == OperationType.pushBack) {
-                if(t.set.containsKey(possibleSize)) 
-                    rwop = t.set.get(possibleSize);
+
+                // Check if it's the first operation for this index and set checkBounds
+                if(rwop.lastWriteOp == null && rwop.readList.size() == 0) {
+                    rwop.checkBounds = false;
+                }
+
+                if(!sizeAcquired) {
+                    do {
+                        oldSize = v.size.get();
+                        newSize = new CompactElement(oldSize.oldValue, oldSize.newValue, t);
+                        
+                        while (oldSize.desc.status.get() == TxnStatus.active)
+                            CompleteTransaction(oldSize.desc, 0);
+
+                        if (oldSize.desc.status.get() == TxnStatus.committed)
+                                newSize.oldValue = oldSize.newValue;
+                        else 
+                                newSize.oldValue = oldSize.oldValue;
+
+                        newSize.desc = t;
+                    } while(!v.size.compareAndSet(oldSize, newSize));
+
+                    sizeAcquired = true;
+                    possibleSize = newSize.oldValue;
+                }
+
+                if(localSet.containsKey(possibleSize)) 
+                    rwop = localSet.get(possibleSize);
                  else    
                     rwop = new RWOperation();
+
                 rwop.checkBounds = false;
                 rwop.lastWriteOp = op;
-                t.set.put(possibleSize, rwop);
+                localSet.put(possibleSize, rwop);
                 possibleSize++;
                 largestReserve = Math.max(largestReserve, possibleSize);
             }
@@ -241,14 +365,23 @@ class Perform implements Runnable {
         }
 
         // do something with the largestReserve value
-        if(largestReserve > 0 && largestReserve > v.array.length)
-                v.Reserve(largestReserve);
-*/
+        if(largestReserve > 0) {
+                //v.Reserve(largestReserve, newSize.oldValue);
         }
 
-        return largestReserve;
+        newSize.desc.set.compareAndSet(null, (ConcurrentHashMap<Integer, RWOperation>) localSet);
+
+
+        return true;
     }
 
+
+
+    // private CompactElement AcquireSizeElement() {
+    //     // return the size in the compact size element
+
+    //     return new CompactElement();
+    // }
 
     private Boolean CompleteTransaction(Transaction desc, int lowerBounds) {
 
@@ -256,7 +389,7 @@ class Perform implements Runnable {
 
         // reserve first 
 
-        Set<Integer> indexes = desc.set.keySet();
+        Set<Integer> indexes = desc.set.get().keySet();
 
         List<Integer> list = new ArrayList<>();
         for(Integer x : indexes) {
@@ -276,7 +409,7 @@ class Perform implements Runnable {
         while(it.hasNext()) {
 
             int index = it.next();
-            RWOperation rwop = desc.set.get(index);
+            RWOperation rwop = desc.set.get().get(index);
 
             // Only read operations on an index
             if(rwop.lastWriteOp == null && rwop.readList.size() > 0) {

@@ -27,7 +27,7 @@ public class locked {
         for(int i = 0; i <  8; i++)
             v.Populate();
 
-        // Maybe build all transactions beforehand and place in queue
+        // Maybe build all TransactionRegs beforehand and place in queue
 
 
         // Create threads
@@ -35,7 +35,7 @@ public class locked {
 
         for(int i = 0; i < threads.length; i++)
         {
-            Transaction[] transactions = BuildTransactions();
+            TransactionReg[] transactions = BuildTransactions();
             Thread t = new Thread(new Perform(lockManager, v, transactions));
             t.setName(String.valueOf(i+1));
             threads[i] = t;
@@ -68,9 +68,9 @@ public class locked {
 
 
     // Creates an array of transactions for a thread to pull from
-    public static Transaction[] BuildTransactions() {
+    public static TransactionReg[] BuildTransactions() {
 
-        Transaction[] transactions = new Transaction[1];        // ******** CHANGE THIS NUMBER LATER *********
+        TransactionReg[] transactions = new TransactionReg[1];        // ******** CHANGE THIS NUMBER LATER *********
 
         // Build each transaction and insert it into transactions array
         for(int x = 0; x < transactions.length; x++) {
@@ -103,7 +103,7 @@ public class locked {
                 operationCount++;
             }
 
-            Transaction t = new Transaction(operations);
+            TransactionReg t = new TransactionReg(operations);
 
             transactions[x] = t;
         }
@@ -151,11 +151,11 @@ class Perform implements Runnable {
 
     public MRLOCK lockManager;
     public CompactLFTV v;
-    Transaction[] transactions;
+    TransactionReg[] transactions;
 
 
 
-    public Perform (MRLOCK manager, CompactLFTV vector, Transaction[] t) {
+    public Perform (MRLOCK manager, CompactLFTV vector, TransactionReg[] t) {
         lockManager = manager;
         v = vector;
         transactions = t;
@@ -165,7 +165,7 @@ class Perform implements Runnable {
     {
         for(int i = 0; i < transactions.length; i++) {
 
-            Transaction t = transactions[i];
+            TransactionReg t = transactions[i];
             Preprocess(t);
             CompleteTransaction(t);
 
@@ -175,7 +175,7 @@ class Perform implements Runnable {
         }
     }
 
-    public static void Preprocess(Transaction t) {
+    public static void Preprocess(TransactionReg t) {
 
         RWOperation rwop = null;
         int largestReserve = 0;
@@ -258,7 +258,7 @@ class Perform implements Runnable {
               
     }
 
-    private void CompleteTransaction(Transaction desc) {
+    private void CompleteTransaction(TransactionReg desc) {
        
         BitSet request = new BitSet();
 
