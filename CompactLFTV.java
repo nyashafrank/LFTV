@@ -102,7 +102,6 @@ public class CompactLFTV {
                 return true;
             }
 
-            // Should i be storing the desc.status or accessing it every time?
             while (oldElem.desc.status.get() == TxnStatus.active) {
                 //completeTransaction(oldElem.desc, index)
             }
@@ -153,8 +152,8 @@ public class CompactLFTV {
         }
     }
 
-    public void Reserve(int newCapacity, int currentSize) {
-        int x = currentSize + FIRST_BUCKET_CAPACITY - 1;
+    public void Reserve(int newCapacity) {
+        int x = size.get().oldValue + FIRST_BUCKET_CAPACITY - 1;
         int index = Integer.numberOfLeadingZeros(FIRST_BUCKET_CAPACITY) - Integer.numberOfLeadingZeros(x);
         if (index < 1) index = 1;
 
