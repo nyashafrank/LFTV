@@ -61,7 +61,7 @@ public class locked {
 
         long endTime = System.currentTimeMillis();
 
-        //System.out.println("\nExecution time = " + (endTime - startTime) + "ms\n");
+        System.out.println("\nExecution time = " + (endTime - startTime) + "ms\n");
     
         
     }

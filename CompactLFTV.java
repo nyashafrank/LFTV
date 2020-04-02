@@ -1,3 +1,4 @@
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicReferenceArray;
@@ -46,7 +47,10 @@ public class CompactLFTV {
 
             RWOperation rwop = new RWOperation();
             rwop.lastWriteOp = op;
-            t.set.put(s, rwop);
+
+            ConcurrentHashMap<Integer, RWOperation> rwset = t.set.get();
+            rwset.put(s, rwop);
+            t.set.getAndSet(rwset);
 
             CompactElement c = new CompactElement();
             c.oldValue = Integer.MAX_VALUE;
