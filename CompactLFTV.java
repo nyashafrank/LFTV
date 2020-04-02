@@ -17,18 +17,19 @@ public class CompactLFTV {
     private static final int FIRST_BUCKET_CAPACITY = 8;
     private static final int BUCKETS_LENGTH = 30;
     private static final int UNSET = Integer.MAX_VALUE;
-    public AtomicReference<Integer> size;
+    public AtomicReference<CompactElement> size;
     private final AtomicReferenceArray<AtomicReferenceArray<CompactElement>> buckets;
 
     public CompactLFTV() {
-        size = new AtomicReference<Integer>(0);
+        size = new AtomicReference<CompactElement>(new CompactElement());
         buckets = new AtomicReferenceArray<AtomicReferenceArray<CompactElement>>(BUCKETS_LENGTH);
         buckets.set(0, new AtomicReferenceArray<CompactElement>(FIRST_BUCKET_CAPACITY));
     }
 
     public void Populate() {
-     
-        int s = size.get();
+        CompactElement currentSize = size.get();
+        CompactElement newSize = new CompactElement(currentSize);
+        int s = currentSize.oldValue;
 
         BucketAndIndex bai = calculateWhichBucketAndIndex(s);
 
@@ -52,15 +53,16 @@ public class CompactLFTV {
             c.newValue = v;
             c.desc = t;
             
-            size.compareAndExchange(s, s+1);
+            newSize.newValue = s+1;
+            size.compareAndExchange(currentSize, newSize);
 
             buckets.get(bai.bucket).compareAndSet(s, null, c);
-            
+    
         }
         
     }
 
-    private BucketAndIndex calculateWhichBucketAndIndex(int index) {
+    public BucketAndIndex calculateWhichBucketAndIndex(int index) {
         // Account for initial capacity being 8 instead of 0
         int x = index + FIRST_BUCKET_CAPACITY;
 
@@ -76,35 +78,30 @@ public class CompactLFTV {
     public boolean UpdateElem(int index, CompactElement newElem) {
         BucketAndIndex bucketAndIndex = calculateWhichBucketAndIndex(index);
         CompactElement oldElem;
+        AtomicReferenceArray<CompactElement> bucket;
         RWOperation op;
 
         //System.out.println("Grabbing index " + index);
         do {
-            int s = size.get();
-
-            if (index >= s) {
+            bucket = buckets.get(bucketAndIndex.bucket);
+            if (bucket == null) {
                 newElem.desc.status.set(TxnStatus.aborted);
                 return false;
-            } else {
-                oldElem = buckets.get(bucketAndIndex.bucket).get(bucketAndIndex.indexInBucket);
-                if(oldElem == null)
-                    System.out.println("we got a null ");
+            }
+            oldElem = bucket.get(bucketAndIndex.indexInBucket);
+            if(oldElem == null) {
+                newElem.desc.status.set(TxnStatus.aborted);
+                return false;
             }
 
             if (newElem.desc.status.get() != TxnStatus.active) {
                 return true;
             }
 
-            // Should i be storing the desc or accessing it every time?
-            if(newElem.desc == null)
-                System.out.println("new desc is null");
-            if(oldElem.desc == null)
-                System.out.println("old desc is null");
             if (oldElem.desc == newElem.desc) {
                 return true;
             }
 
-            // Should i be storing the desc.status or accessing it every time?
             while (oldElem.desc.status.get() == TxnStatus.active) {
                 //completeTransaction(oldElem.desc, index)
             }
@@ -149,15 +146,14 @@ public class CompactLFTV {
 
     public void PrintVector() {
 
-        for(int i = 0; i < size.get(); i++) {
+        for(int i = 0; i < size.get().oldValue; i++) {
             CompactElement c = buckets.get(0).get(i);
             System.out.println(c);
         }
     }
 
     public void Reserve(int newCapacity) {
-        int currentSize = size.get();
-        int x = currentSize + FIRST_BUCKET_CAPACITY - 1;
+        int x = size.get().oldValue + FIRST_BUCKET_CAPACITY - 1;
         int index = Integer.numberOfLeadingZeros(FIRST_BUCKET_CAPACITY) - Integer.numberOfLeadingZeros(x);
         if (index < 1) index = 1;
 
