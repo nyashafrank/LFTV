@@ -22,7 +22,7 @@ public class CompactLFTV {
     private final AtomicReferenceArray<AtomicReferenceArray<CompactElement>> buckets;
 
     public CompactLFTV() {
-        size = new AtomicReference<CompactElement>(new CompactElement());
+        size = new AtomicReference<CompactElement>(new CompactElement(0,0, new Transaction(TxnStatus.committed)));
         buckets = new AtomicReferenceArray<AtomicReferenceArray<CompactElement>>(BUCKETS_LENGTH);
         buckets.set(0, new AtomicReferenceArray<CompactElement>(FIRST_BUCKET_CAPACITY));
     }
@@ -30,12 +30,12 @@ public class CompactLFTV {
     public void Populate() {
         CompactElement currentSize = size.get();
         CompactElement newSize = new CompactElement(currentSize);
-        int s = currentSize.oldValue;
+        int s = currentSize.newValue;
 
+        
         BucketAndIndex bai = calculateWhichBucketAndIndex(s);
-
         if(buckets.get(bai.bucket).get(bai.indexInBucket) == null) {
-           
+           System.out.println("Here!!!");
 
             Transaction t = new Transaction(TxnStatus.committed);
 
@@ -48,7 +48,9 @@ public class CompactLFTV {
             RWOperation rwop = new RWOperation();
             rwop.lastWriteOp = op;
 
-            ConcurrentHashMap<Integer, RWOperation> rwset = t.set.get();
+            ConcurrentHashMap<Integer, RWOperation> rwset = new ConcurrentHashMap<>();
+            t.set.set(rwset);
+            t.set.get();
             rwset.put(s, rwop);
             t.set.getAndSet(rwset);
 
@@ -110,13 +112,13 @@ public class CompactLFTV {
                 //completeTransaction(oldElem.desc, index)
             }
 
-            if (oldElem.desc.status.get() == TxnStatus.committed && oldElem.desc.set.get(index).lastWriteOp != null) {
+            if (oldElem.desc.status.get() == TxnStatus.committed && oldElem.desc.set.get().get(index).lastWriteOp != null) {
                 newElem.oldValue = oldElem.newValue;
             } else {
                 newElem.oldValue = oldElem.oldValue;
             }
 
-            op = newElem.desc.set.get(index);
+            op = newElem.desc.set.get().get(index);
             if (op.checkBounds == true && newElem.oldValue == UNSET) {
                 newElem.desc.status.set(TxnStatus.aborted);
                 return false;
@@ -124,7 +126,7 @@ public class CompactLFTV {
 
         } while (!buckets.get(bucketAndIndex.bucket).compareAndSet(bucketAndIndex.indexInBucket, oldElem, newElem));
 
-        op = newElem.desc.set.get(index);
+        op = newElem.desc.set.get().get(index);
         for (int i = 0; i < op.readList.size(); i++) {
             op.readList.get(i).returnValue = newElem.oldValue;
         }
@@ -140,7 +142,8 @@ public class CompactLFTV {
         CompactElement c = buckets.get(bai.bucket).get(bai.indexInBucket);
 
         if(c == null) {
-            System.err.println("Theh element is null in readElement()");
+            System.err.println("The element is null in readElement()");
+            return UNSET;
         }
         if(c.desc.status.get() == TxnStatus.committed)
             return c.newValue;
@@ -150,7 +153,7 @@ public class CompactLFTV {
 
     public void PrintVector() {
 
-        for(int i = 0; i < size.get().oldValue; i++) {
+        for(int i = 0; i < size.get().newValue; i++) {
             CompactElement c = buckets.get(0).get(i);
             System.out.println(c);
         }

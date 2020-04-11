@@ -26,7 +26,7 @@ public class lockfree {
         lftv.PrintVector();
 
         // Initialize threads array
-        Thread[] threads = new Thread[3];           // ******** VARY NUMBER OF THREADS *********
+        Thread[] threads = new Thread[10];           // ******** VARY NUMBER OF THREADS *********
 
         // Create Threads
         for(int i = 0; i < threads.length; i++)
@@ -65,7 +65,7 @@ public class lockfree {
     // Creates an array of transactions for a thread to pull from
     public static Transaction[] BuildTransactions() {
 
-        Transaction[] transactions = new Transaction[3];        // ******** CHANGE THIS NUMBER LATER *********
+        Transaction[] transactions = new Transaction[20];        // ******** CHANGE THIS NUMBER LATER *********
 
         // Build each transaction and insert it into transactions array
         for(int x = 0; x < transactions.length; x++) {
@@ -169,7 +169,6 @@ class Perform implements Runnable {
         for(int i = 0; i < transactions.length; i++) {
 
             Transaction t = transactions[i];
-            t.set = null;
 
             boolean success = Preprocess(t);
 
@@ -366,10 +365,10 @@ class Perform implements Runnable {
 
         // do something with the largestReserve value
         if(largestReserve > 0) {
-                //v.Reserve(largestReserve, newSize.oldValue);
+                v.Reserve(largestReserve);
         }
 
-        newSize.desc.set.compareAndSet(null, (ConcurrentHashMap<Integer, RWOperation>) localSet);
+        t.set.compareAndSet(null, (ConcurrentHashMap<Integer, RWOperation>) localSet);
 
 
         return true;
@@ -434,6 +433,8 @@ class Perform implements Runnable {
                 }
             }
         }
+
+
 
         desc.status.set(TxnStatus.committed);
         return true;

@@ -14,7 +14,7 @@ public class Transaction {
         if (operations == null) size = 0;
         else this.size = operations.length;
         this.status = new AtomicReference<TxnStatus>(TxnStatus.active);
-       // this.set = new AtomicReference<ConcurrentHashMap<>>(null);
+        this.set = new AtomicReference<ConcurrentHashMap<Integer, RWOperation>>(null);
     }
 
     // this constructor is for populating
