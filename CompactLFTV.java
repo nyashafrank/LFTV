@@ -1,3 +1,4 @@
+import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicReference;
@@ -14,6 +15,10 @@ public class CompactLFTV {
             this.indexInBucket = indexInBucket;
         }
     }
+    public static void main(String[] args) {
+        CompactLFTV test = new CompactLFTV();
+        test.Populate(1000);
+    }
 
     private static final int FIRST_BUCKET_CAPACITY = 8;
     private static final int BUCKETS_LENGTH = 30;
@@ -25,6 +30,36 @@ public class CompactLFTV {
         size = new AtomicReference<CompactElement>(new CompactElement(0,0, new Transaction(TxnStatus.committed)));
         buckets = new AtomicReferenceArray<AtomicReferenceArray<CompactElement>>(BUCKETS_LENGTH);
         buckets.set(0, new AtomicReferenceArray<CompactElement>(FIRST_BUCKET_CAPACITY));
+    }
+
+    public void Populate(int amount) {
+        Reserve(amount);
+        Transaction t = new Transaction(TxnStatus.committed);
+        ConcurrentHashMap<Integer, RWOperation> rwset = new ConcurrentHashMap<>();
+        t.set.set(rwset);
+        
+        Random random = new Random();
+        for (int i = 0; i < amount; i++) {
+            BucketAndIndex bai = calculateWhichBucketAndIndex(i);
+            CompactElement c = new CompactElement();
+            c.oldValue = Integer.MAX_VALUE;
+            c.newValue = random.nextInt(50);
+            c.desc = t;
+
+            Operation op = new Operation(OperationType.pushBack, c.newValue, i);
+
+            RWOperation rwop = new RWOperation();
+            rwop.lastWriteOp = op;
+
+            rwset.put(i, rwop);
+
+            buckets.get(bai.bucket).compareAndSet(bai.indexInBucket, null, c);
+        }
+
+        CompactElement currentSize = size.get();
+        CompactElement newSize = new CompactElement(currentSize);
+        newSize.newValue = amount;
+        size.compareAndExchange(currentSize, newSize);
     }
 
     public void Populate() {
@@ -160,14 +195,13 @@ public class CompactLFTV {
     }
 
     public void Reserve(int newCapacity) {
-        int x = size.get().oldValue + FIRST_BUCKET_CAPACITY - 1;
-        int index = Integer.numberOfLeadingZeros(FIRST_BUCKET_CAPACITY) - Integer.numberOfLeadingZeros(x);
-        if (index < 1) index = 1;
-
-        int capacity = buckets.get(index - 1).length();
-        while (index < Integer.numberOfLeadingZeros(FIRST_BUCKET_CAPACITY) - Integer.numberOfLeadingZeros(newCapacity + FIRST_BUCKET_CAPACITY -1)) {
+        int capacity = FIRST_BUCKET_CAPACITY;
+        int totalCapacity = capacity;
+        int index = 0;
+        while (newCapacity > totalCapacity) {
             index++;
             capacity *= 2;
+            totalCapacity += capacity;
             buckets.compareAndSet(index, null, new AtomicReferenceArray<CompactElement>(capacity));
         }
     }
