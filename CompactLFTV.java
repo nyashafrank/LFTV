@@ -1,3 +1,4 @@
+import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicReference;
@@ -35,7 +36,7 @@ public class CompactLFTV {
         
         BucketAndIndex bai = calculateWhichBucketAndIndex(s);
         if(buckets.get(bai.bucket).get(bai.indexInBucket) == null) {
-           System.out.println("Here!!!");
+          // System.out.println("Here!!!");
 
             Transaction t = new Transaction(TxnStatus.committed);
 
@@ -66,6 +67,37 @@ public class CompactLFTV {
     
         }
         
+    }
+
+
+    public void Populate(int amount) {
+        Reserve(amount);
+        Transaction t = new Transaction(TxnStatus.committed);
+        ConcurrentHashMap<Integer, RWOperation> rwset = new ConcurrentHashMap<>();
+        t.set.set(rwset);
+
+        Random random = new Random();
+        for (int i = 0; i < amount; i++) {
+            BucketAndIndex bai = calculateWhichBucketAndIndex(i);
+            CompactElement c = new CompactElement();
+            c.oldValue = Integer.MAX_VALUE;
+            c.newValue = random.nextInt(50);
+            c.desc = t;
+
+            Operation op = new Operation(OperationType.pushBack, c.newValue, i);
+
+            RWOperation rwop = new RWOperation();
+            rwop.lastWriteOp = op;
+
+            rwset.put(i, rwop);
+
+            buckets.get(bai.bucket).compareAndSet(bai.indexInBucket, null, c);
+        }
+
+        CompactElement currentSize = size.get();
+        CompactElement newSize = new CompactElement(currentSize);
+        newSize.newValue = amount;
+        size.compareAndExchange(currentSize, newSize);
     }
 
     public BucketAndIndex calculateWhichBucketAndIndex(int index) {
@@ -142,7 +174,7 @@ public class CompactLFTV {
         CompactElement c = buckets.get(bai.bucket).get(bai.indexInBucket);
 
         if(c == null) {
-            System.err.println("The element is null in readElement()");
+           // System.err.println("The element is null in readElement()");
             return UNSET;
         }
         if(c.desc.status.get() == TxnStatus.committed)
@@ -154,22 +186,87 @@ public class CompactLFTV {
     public void PrintVector() {
 
         for(int i = 0; i < size.get().newValue; i++) {
-            CompactElement c = buckets.get(0).get(i);
-            System.out.println(c);
+          //  System.out.println("printing index " + i);
+            BucketAndIndex bai = calculateWhichBucketAndIndex(i);
+            CompactElement c = buckets.get(bai.bucket).get(bai.indexInBucket);
+            if(c != null)
+                System.out.println(c);
         }
     }
 
     public void Reserve(int newCapacity) {
-        int x = size.get().oldValue + FIRST_BUCKET_CAPACITY - 1;
-        int index = Integer.numberOfLeadingZeros(FIRST_BUCKET_CAPACITY) - Integer.numberOfLeadingZeros(x);
-        if (index < 1) index = 1;
-
-        int capacity = buckets.get(index - 1).length();
-        while (index < Integer.numberOfLeadingZeros(FIRST_BUCKET_CAPACITY) - Integer.numberOfLeadingZeros(newCapacity + FIRST_BUCKET_CAPACITY -1)) {
+        int capacity = FIRST_BUCKET_CAPACITY;
+        int totalCapacity = capacity;
+        int index = 0;
+        while (newCapacity > totalCapacity) {
             index++;
             capacity *= 2;
+            totalCapacity += capacity;
             buckets.compareAndSet(index, null, new AtomicReferenceArray<CompactElement>(capacity));
         }
+    }
+
+
+
+
+
+    public boolean UpdateElemNoHelping(int index, CompactElement newElem) {
+        BucketAndIndex bucketAndIndex = calculateWhichBucketAndIndex(index);
+        CompactElement oldElem;
+        AtomicReferenceArray<CompactElement> bucket;
+        RWOperation op;
+
+        //System.out.println("Grabbing index " + index);
+        bucket = buckets.get(bucketAndIndex.bucket);
+        if (bucket == null) {
+            newElem.desc.status.set(TxnStatus.aborted);
+          //  System.out.println("bucket is null");
+            return false;
+        }
+
+        //System.out.println("truogn to place in bucket " + bucketAndIndex.bucket + " "+ bucketAndIndex.indexInBucket + " but actual index should be " + index);
+        oldElem = bucket.get(bucketAndIndex.indexInBucket);
+        if(oldElem == null) {
+           // newElem.desc.status.set(TxnStatus.aborted);
+           // System.out.println("oldElem is null on index " + index);
+            newElem.oldValue = UNSET;
+           if( buckets.get(bucketAndIndex.bucket).compareAndSet(bucketAndIndex.indexInBucket, null, newElem)){
+               
+                CompactElement c = buckets.get(bucketAndIndex.bucket).get(bucketAndIndex.indexInBucket);
+               // System.out.println("Swapped out old elem \n "+ c);
+           }
+            
+        }
+
+        else{
+
+            if (oldElem.desc.status.get() == TxnStatus.committed && oldElem.desc.set.get().get(index).lastWriteOp != null) {
+                newElem.oldValue = oldElem.newValue;
+            } else {
+                newElem.oldValue = oldElem.oldValue;
+            }
+
+            op = newElem.desc.set.get().get(index);
+            if (op.checkBounds == true && newElem.oldValue == UNSET) {
+                newElem.desc.status.set(TxnStatus.aborted);
+               // System.out.println("unset val");
+                return false;
+            }
+
+            if(buckets.get(bucketAndIndex.bucket).compareAndSet(bucketAndIndex.indexInBucket, oldElem, newElem)){
+                //System.out.println("Element successfully replaced");
+            }
+
+        }
+    
+        
+
+        op = newElem.desc.set.get().get(index);
+        for (int i = 0; i < op.readList.size(); i++) {
+            op.readList.get(i).returnValue = newElem.oldValue;
+        }
+
+        return true;
     }
 
 }
