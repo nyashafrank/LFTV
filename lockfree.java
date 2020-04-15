@@ -2,7 +2,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class lockfree {
     // CHANGE THIS TO VARY PREPOPULATION AND RANGE OF OPERATIONS
-    private static final int TEST_AMOUNT = 10000;
+    private static final int TEST_AMOUNT = 100000;
 
     public static int totalOpTypes = 6;
     public static final int UNSET = Integer.MAX_VALUE;
@@ -46,7 +46,7 @@ public class lockfree {
 
         System.out.println("\n\n\t------ Final State ------\n");
         //lftv.PrintVector();
-        //System.out.println(lftv.size.get());
+        System.out.println(lftv.size.get());
         
         
         System.out.println("\nExecution time = " + (endTime - startTime) + "ms\n");

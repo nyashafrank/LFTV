@@ -132,6 +132,10 @@ public class CompactLFTV {
                     do {
                         oldSize = size.get();
                         newSize = new CompactElement(oldSize.oldValue, oldSize.newValue, t);
+
+                        if (oldSize.desc == t) {
+                            break;
+                        }
                         
                         while (oldSize.desc.status.get() == TxnStatus.active) {
                             boolean success = Preprocess(oldSize.desc);
@@ -159,6 +163,10 @@ public class CompactLFTV {
                     do {
                         oldSize = size.get();
                         newSize = new CompactElement(oldSize.oldValue, oldSize.newValue, t);
+
+                        if (oldSize.desc == t) {
+                            break;
+                        }
                         
                         while (oldSize.desc.status.get() == TxnStatus.active) {
                             boolean success = Preprocess(oldSize.desc);
@@ -200,6 +208,10 @@ public class CompactLFTV {
                     do {
                         oldSize = size.get();
                         newSize = new CompactElement(oldSize.oldValue, oldSize.newValue, t);
+
+                        if (oldSize.desc == t) {
+                            break;
+                        }
                         
                         while (oldSize.desc.status.get() == TxnStatus.active) {
                             boolean success = Preprocess(oldSize.desc);
