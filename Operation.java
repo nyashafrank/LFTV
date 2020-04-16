@@ -23,7 +23,7 @@ public class Operation {
         if (operationType == OperationType.pushBack || operationType == OperationType.write)
             str += " value " + (Integer.toString(value));
 
-        if (operationType == OperationType.popBack || operationType == OperationType.read)
+        if (operationType == OperationType.popBack || operationType == OperationType.read || operationType == OperationType.size)
             str += " returned " + Integer.toString(returnValue);
 
         if (operationType == OperationType.write || operationType == OperationType.read)

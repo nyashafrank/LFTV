@@ -338,28 +338,8 @@ public class CompactLFTV {
         size.compareAndExchange(currentSize, newSize);
     }
 
-    public void PrintVector() {
-        for(int i = 0; i < size.get().newValue; i++) {
-            BucketAndIndex bai = calculateWhichBucketAndIndex(i);
-            System.out.println(buckets.get(bai.bucket).get(bai.indexInBucket));
-        }
-    }
 
-    // Read an element from shared memory - For reads not followed by a write
-    public int ReadElement(int index) {
 
-        BucketAndIndex bai = calculateWhichBucketAndIndex(index);
-        CompactElement c = buckets.get(bai.bucket).get(bai.indexInBucket);
-
-        if(c == null) {
-            System.err.println("The element is null in readElement()");
-            return UNSET;
-        }
-        if(c.desc.status.get() == TxnStatus.committed)
-            return c.newValue;
-        else
-            return c.oldValue;
-    }
 
     // Update the element at the given index with the new element
     private boolean UpdateElem(int index, CompactElement newElem) {
@@ -406,6 +386,86 @@ public class CompactLFTV {
             }
 
         } while (!buckets.get(bucketAndIndex.bucket).compareAndSet(bucketAndIndex.indexInBucket, oldElem, newElem));
+
+        op = newElem.desc.set.get().get(index);
+        for (int i = 0; i < op.readList.size(); i++) {
+            op.readList.get(i).returnValue = newElem.oldValue;
+        }
+
+        return true;
+    }
+
+
+    // Read an element from shared memory - For reads not followed by a write
+    public int ReadElement(int index) {
+
+        BucketAndIndex bai = calculateWhichBucketAndIndex(index);
+        CompactElement c = buckets.get(bai.bucket).get(bai.indexInBucket);
+
+        if(c == null) {
+           // System.err.println("The element is null in readElement()");
+            return UNSET;
+        }
+        if(c.desc.status.get() == TxnStatus.committed)
+            return c.newValue;
+        else
+            return c.oldValue;
+    }
+
+
+    public void PrintVector() {
+
+        for(int i = 0; i < size.get().newValue; i++) {
+          //  System.out.println("printing index " + i);
+            BucketAndIndex bai = calculateWhichBucketAndIndex(i);
+            CompactElement c = buckets.get(bai.bucket).get(bai.indexInBucket);
+            if(c != null)
+                System.out.println(c);
+        }
+    }
+
+
+    public boolean UpdateElemNoHelping(int index, CompactElement newElem) {
+        BucketAndIndex bucketAndIndex = calculateWhichBucketAndIndex(index);
+        CompactElement oldElem;
+        AtomicReferenceArray<CompactElement> bucket;
+        RWOperation op;
+
+        bucket = buckets.get(bucketAndIndex.bucket);
+        if (bucket == null) {
+            newElem.desc.status.set(TxnStatus.aborted);
+            return false;
+        }
+
+        oldElem = bucket.get(bucketAndIndex.indexInBucket);
+        if(oldElem == null) {
+            newElem.oldValue = UNSET;
+           if( buckets.get(bucketAndIndex.bucket).compareAndSet(bucketAndIndex.indexInBucket, null, newElem)){
+               
+                CompactElement c = buckets.get(bucketAndIndex.bucket).get(bucketAndIndex.indexInBucket);
+               // System.out.println("Swapped out old elem \n "+ c);
+           }
+        }
+
+        else{
+
+            if (oldElem.desc.status.get() == TxnStatus.committed && oldElem.desc.set.get().get(index).lastWriteOp != null) {
+                newElem.oldValue = oldElem.newValue;
+            } else {
+                newElem.oldValue = oldElem.oldValue;
+            }
+
+            op = newElem.desc.set.get().get(index);
+            if (op.checkBounds == true && newElem.oldValue == UNSET) {
+                newElem.desc.status.set(TxnStatus.aborted);
+               // System.out.println("unset val");
+                return false;
+            }
+
+            if(buckets.get(bucketAndIndex.bucket).compareAndSet(bucketAndIndex.indexInBucket, oldElem, newElem)){
+                //System.out.println("Element successfully replaced");
+            }
+        }
 
         op = newElem.desc.set.get().get(index);
         for (int i = 0; i < op.readList.size(); i++) {
