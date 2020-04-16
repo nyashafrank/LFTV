@@ -44,7 +44,7 @@ public class locked {
 
 
         // Create threads
-        Thread[] threads = new Thread[1];
+        Thread[] threads = new Thread[8];
 
         for(int i = 0; i < threads.length; i++)
         {
